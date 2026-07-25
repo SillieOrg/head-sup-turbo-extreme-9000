@@ -19,8 +19,14 @@ Response `200`:
 - `GET /lists/{listId}`
 - `PUT /lists/{listId}`
 - `DELETE /lists/{listId}`
+- `GET /favorites`
 - `POST /favorites/{listId}`
 - `DELETE /favorites/{listId}`
+
+`GET /lists` query params:
+
+- `title` (substring filter)
+- `owner` (substring filter)
 
 ## Planned error shape
 
@@ -40,6 +46,14 @@ Code families:
 
 ## Auth-lite header
 
-Write routes require:
+Write and favorites-read routes require:
 
 - `x-user-id: <username-or-device-linked-id>`
+
+`GET /favorites` response:
+
+```json
+{
+  "listIds": ["list-id-1", "list-id-2"]
+}
+```

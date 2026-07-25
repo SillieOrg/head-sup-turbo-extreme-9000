@@ -249,7 +249,7 @@ Notes:
 
 ## 12) Immediate Next Steps
 1. Tighten quota counters to fully transactional updates for create/update/delete flows.
-2. Add list delete route and decrement counters for user/global usage.
-3. Add version retention cap (keep latest N versions per list).
-4. Replace placeholder CORS origin in apply workflow input with real GitHub Pages origin.
-5. Run first remote apply and verify `GET /health` and list routes from deployed API URL.
+2. Apply Terraform with real GitHub Pages origin and verify CORS headers from browser.
+3. Run first remote apply and verify `GET /health`, list CRUD routes, and favorites routes from deployed API URL.
+4. Add offline cache/download behavior for lists in frontend.
+5. Add gyroscope-based gameplay screen and calibrate tilt thresholds.

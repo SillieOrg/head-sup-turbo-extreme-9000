@@ -10,11 +10,17 @@ from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
 
 dynamodb = boto3.resource("dynamodb")
+dynamodb_client = boto3.client("dynamodb")
 
-LISTS_TABLE = dynamodb.Table(os.environ["LISTS_TABLE"])
-LIST_VERSIONS_TABLE = dynamodb.Table(os.environ["LIST_VERSIONS_TABLE"])
-FAVORITES_TABLE = dynamodb.Table(os.environ["FAVORITES_TABLE"])
-USAGE_TABLE = dynamodb.Table(os.environ["USAGE_TABLE"])
+LISTS_TABLE_NAME = os.environ["LISTS_TABLE"]
+LIST_VERSIONS_TABLE_NAME = os.environ["LIST_VERSIONS_TABLE"]
+FAVORITES_TABLE_NAME = os.environ["FAVORITES_TABLE"]
+USAGE_TABLE_NAME = os.environ["USAGE_TABLE"]
+
+LISTS_TABLE = dynamodb.Table(LISTS_TABLE_NAME)
+LIST_VERSIONS_TABLE = dynamodb.Table(LIST_VERSIONS_TABLE_NAME)
+FAVORITES_TABLE = dynamodb.Table(FAVORITES_TABLE_NAME)
+USAGE_TABLE = dynamodb.Table(USAGE_TABLE_NAME)
 
 MAX_LISTS_PER_USER = int(os.environ.get("MAX_LISTS_PER_USER", "30"))
 MAX_WORDS_PER_LIST = int(os.environ.get("MAX_WORDS_PER_LIST", "1000"))
@@ -51,7 +57,8 @@ def day_key():
 
 
 def user_id_from_event(event):
-    username = event.get("headers", {}).get("x-user-id")
+    headers = event.get("headers", {})
+    username = headers.get("x-user-id") or headers.get("X-User-Id")
     if not username:
         return None
     return username.strip()
@@ -85,6 +92,19 @@ def usage_put_count(scope, lists_delta=0, words_delta=0):
         UpdateExpression=", ".join(expr),
         ExpressionAttributeValues=values,
     )
+
+
+def ddb_str(value):
+    return {"S": value}
+
+
+def ddb_num(value):
+    return {"N": str(value)}
+
+
+def ddb_item(value):
+    serializer = boto3.dynamodb.types.TypeSerializer()
+    return {key: serializer.serialize(raw) for key, raw in value.items()}
 
 
 def increment_daily_user_write_quota(user_id):
@@ -184,18 +204,7 @@ def create_list(event):
     word_count = len(words)
     user_scope = f"USER#{user_id}"
     global_scope = "GLOBAL#MAIN"
-    user_usage = usage_get(user_scope)
-    global_usage = usage_get(global_scope)
-
-    if int(user_usage.get("listsCount", 0)) >= MAX_LISTS_PER_USER:
-        return response(429, {"code": "QUOTA_USER_LISTS_EXCEEDED", "message": "User list limit reached."})
-    if int(user_usage.get("wordsCount", 0)) + word_count > MAX_TOTAL_WORDS_PER_USER:
-        return response(429, {"code": "QUOTA_USER_TOTAL_WORDS_EXCEEDED", "message": "User total word limit reached."})
-    if int(global_usage.get("listsCount", 0)) >= MAX_GLOBAL_LISTS:
-        return response(429, {"code": "QUOTA_GLOBAL_LISTS_EXCEEDED", "message": "Global list limit reached."})
-    if int(global_usage.get("wordsCount", 0)) + word_count > MAX_GLOBAL_WORDS:
-        return response(429, {"code": "QUOTA_GLOBAL_WORDS_EXCEEDED", "message": "Global word limit reached."})
-
+    user_day_scope = f"DAY#USER#{user_id}#{day_key()}"
     now = now_iso()
     list_id = str(uuid.uuid4())
 
@@ -210,20 +219,102 @@ def create_list(event):
         "createdAt": now,
         "updatedAt": now,
     }
-    LISTS_TABLE.put_item(Item=item, ConditionExpression="attribute_not_exists(listId)")
-    LIST_VERSIONS_TABLE.put_item(
-        Item={
-            "listId": list_id,
-            "version": "v1",
-            "words": words,
-            "checksum": checksum,
-            "updatedBy": user_id,
-            "updatedAt": now,
-        }
-    )
+    version_item = {
+        "listId": list_id,
+        "version": "v1",
+        "words": words,
+        "checksum": checksum,
+        "updatedBy": user_id,
+        "updatedAt": now,
+    }
+    try:
+        dynamodb_client.transact_write_items(
+            TransactItems=[
+                {
+                    "ConditionCheck": {
+                        "TableName": USAGE_TABLE_NAME,
+                        "Key": {"scope": ddb_str(user_scope)},
+                        "ConditionExpression": "attribute_not_exists(listsCount) OR listsCount < :maxLists",
+                        "ExpressionAttributeValues": {":maxLists": ddb_num(MAX_LISTS_PER_USER)},
+                    }
+                },
+                {
+                    "ConditionCheck": {
+                        "TableName": USAGE_TABLE_NAME,
+                        "Key": {"scope": ddb_str(user_scope)},
+                        "ConditionExpression": "attribute_not_exists(wordsCount) OR wordsCount <= :maxWordsRemaining",
+                        "ExpressionAttributeValues": {":maxWordsRemaining": ddb_num(MAX_TOTAL_WORDS_PER_USER - word_count)},
+                    }
+                },
+                {
+                    "ConditionCheck": {
+                        "TableName": USAGE_TABLE_NAME,
+                        "Key": {"scope": ddb_str(global_scope)},
+                        "ConditionExpression": "attribute_not_exists(listsCount) OR listsCount < :maxGlobalLists",
+                        "ExpressionAttributeValues": {":maxGlobalLists": ddb_num(MAX_GLOBAL_LISTS)},
+                    }
+                },
+                {
+                    "ConditionCheck": {
+                        "TableName": USAGE_TABLE_NAME,
+                        "Key": {"scope": ddb_str(global_scope)},
+                        "ConditionExpression": "attribute_not_exists(wordsCount) OR wordsCount <= :maxGlobalWordsRemaining",
+                        "ExpressionAttributeValues": {":maxGlobalWordsRemaining": ddb_num(MAX_GLOBAL_WORDS - word_count)},
+                    }
+                },
+                {
+                    "Update": {
+                        "TableName": USAGE_TABLE_NAME,
+                        "Key": {"scope": ddb_str(user_day_scope)},
+                        "UpdateExpression": "SET updatedAt = :updatedAt ADD writesToday :inc",
+                        "ConditionExpression": "attribute_not_exists(writesToday) OR writesToday < :maxWrites",
+                        "ExpressionAttributeValues": {
+                            ":updatedAt": ddb_str(now),
+                            ":inc": ddb_num(1),
+                            ":maxWrites": ddb_num(MAX_WRITE_OPS_PER_USER_PER_DAY),
+                        },
+                    }
+                },
+                {
+                    "Put": {
+                        "TableName": LISTS_TABLE_NAME,
+                        "Item": ddb_item(item),
+                        "ConditionExpression": "attribute_not_exists(listId)",
+                    }
+                },
+                {"Put": {"TableName": LIST_VERSIONS_TABLE_NAME, "Item": ddb_item(version_item)}},
+                {
+                    "Update": {
+                        "TableName": USAGE_TABLE_NAME,
+                        "Key": {"scope": ddb_str(user_scope)},
+                        "UpdateExpression": "SET updatedAt = :updatedAt ADD listsCount :listInc, wordsCount :wordInc",
+                        "ExpressionAttributeValues": {
+                            ":updatedAt": ddb_str(now),
+                            ":listInc": ddb_num(1),
+                            ":wordInc": ddb_num(word_count),
+                        },
+                    }
+                },
+                {
+                    "Update": {
+                        "TableName": USAGE_TABLE_NAME,
+                        "Key": {"scope": ddb_str(global_scope)},
+                        "UpdateExpression": "SET updatedAt = :updatedAt ADD listsCount :listInc, wordsCount :wordInc",
+                        "ExpressionAttributeValues": {
+                            ":updatedAt": ddb_str(now),
+                            ":listInc": ddb_num(1),
+                            ":wordInc": ddb_num(word_count),
+                        },
+                    }
+                },
+            ]
+        )
+    except ClientError as ex:
+        if ex.response["Error"]["Code"] == "TransactionCanceledException":
+            return response(429, {"code": "QUOTA_EXCEEDED", "message": "List or global limits reached."})
+        raise
+
     trim_old_versions(list_id)
-    usage_put_count(user_scope, lists_delta=1, words_delta=word_count)
-    usage_put_count(global_scope, lists_delta=1, words_delta=word_count)
     return response(201, item)
 
 
@@ -365,22 +456,69 @@ def delete_list(event):
     if not list_id:
         return response(400, {"code": "VALIDATION_LIST_ID_REQUIRED", "message": "listId is required."})
 
-    try:
-        increment_daily_user_write_quota(user_id)
-    except ValueError as ex:
-        return response(429, {"code": str(ex), "message": "Validation or quota failure."})
-
     current = LISTS_TABLE.get_item(Key={"listId": list_id}).get("Item")
     if not current:
         return response(404, {"code": "NOT_FOUND", "message": "List not found."})
     if current.get("ownerUserId") != user_id:
         return response(403, {"code": "AUTH_NOT_OWNER", "message": "Only the owner can delete this list."})
 
-    LISTS_TABLE.delete_item(
-        Key={"listId": list_id},
-        ConditionExpression="ownerUserId = :owner",
-        ExpressionAttributeValues={":owner": user_id},
-    )
+    now = now_iso()
+    word_count = int(current.get("wordCount", 0))
+    user_day_scope = f"DAY#USER#{user_id}#{day_key()}"
+    try:
+        dynamodb_client.transact_write_items(
+            TransactItems=[
+                {
+                    "Update": {
+                        "TableName": USAGE_TABLE_NAME,
+                        "Key": {"scope": ddb_str(user_day_scope)},
+                        "UpdateExpression": "SET updatedAt = :updatedAt ADD writesToday :inc",
+                        "ConditionExpression": "attribute_not_exists(writesToday) OR writesToday < :maxWrites",
+                        "ExpressionAttributeValues": {
+                            ":updatedAt": ddb_str(now),
+                            ":inc": ddb_num(1),
+                            ":maxWrites": ddb_num(MAX_WRITE_OPS_PER_USER_PER_DAY),
+                        },
+                    }
+                },
+                {
+                    "Delete": {
+                        "TableName": LISTS_TABLE_NAME,
+                        "Key": {"listId": ddb_str(list_id)},
+                        "ConditionExpression": "ownerUserId = :owner",
+                        "ExpressionAttributeValues": {":owner": ddb_str(user_id)},
+                    }
+                },
+                {
+                    "Update": {
+                        "TableName": USAGE_TABLE_NAME,
+                        "Key": {"scope": ddb_str(f"USER#{user_id}")},
+                        "UpdateExpression": "SET updatedAt = :updatedAt ADD listsCount :listDec, wordsCount :wordDec",
+                        "ExpressionAttributeValues": {
+                            ":updatedAt": ddb_str(now),
+                            ":listDec": ddb_num(-1),
+                            ":wordDec": ddb_num(-word_count),
+                        },
+                    }
+                },
+                {
+                    "Update": {
+                        "TableName": USAGE_TABLE_NAME,
+                        "Key": {"scope": ddb_str("GLOBAL#MAIN")},
+                        "UpdateExpression": "SET updatedAt = :updatedAt ADD listsCount :listDec, wordsCount :wordDec",
+                        "ExpressionAttributeValues": {
+                            ":updatedAt": ddb_str(now),
+                            ":listDec": ddb_num(-1),
+                            ":wordDec": ddb_num(-word_count),
+                        },
+                    }
+                },
+            ]
+        )
+    except ClientError as ex:
+        if ex.response["Error"]["Code"] == "TransactionCanceledException":
+            return response(429, {"code": "QUOTA_EXCEEDED", "message": "Daily write limit reached."})
+        raise
 
     versions = LIST_VERSIONS_TABLE.query(
         KeyConditionExpression=Key("listId").eq(list_id),
@@ -388,8 +526,6 @@ def delete_list(event):
     for item in versions:
         LIST_VERSIONS_TABLE.delete_item(Key={"listId": list_id, "version": item["version"]})
 
-    usage_put_count(f"USER#{user_id}", lists_delta=-1, words_delta=-int(current.get("wordCount", 0)))
-    usage_put_count("GLOBAL#MAIN", lists_delta=-1, words_delta=-int(current.get("wordCount", 0)))
     return response(204, {})
 
 
@@ -412,6 +548,19 @@ def favorite_list(event, remove=False):
     return response(201, {"userId": user_id, "listId": list_id})
 
 
+def list_favorites(event):
+    user_id = user_id_from_event(event)
+    if not user_id:
+        return response(401, {"code": "AUTH_USER_REQUIRED", "message": "x-user-id header is required."})
+
+    result = FAVORITES_TABLE.query(
+        KeyConditionExpression=Key("userId").eq(user_id),
+    )
+    items = result.get("Items", [])
+    favorite_ids = [item.get("listId") for item in items if item.get("listId")]
+    return response(200, {"listIds": favorite_ids})
+
+
 def handler(event, _context):
     method = event.get("requestContext", {}).get("http", {}).get("method", "")
     route_key = event.get("routeKey", "")
@@ -429,6 +578,8 @@ def handler(event, _context):
             return delete_list(event)
         if route_key == "POST /favorites/{listId}":
             return favorite_list(event, remove=False)
+        if route_key == "GET /favorites":
+            return list_favorites(event)
         if route_key == "DELETE /favorites/{listId}":
             return favorite_list(event, remove=True)
         if method == "OPTIONS":

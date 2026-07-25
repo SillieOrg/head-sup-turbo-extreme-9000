@@ -206,7 +206,7 @@ resource "aws_apigatewayv2_api" "http" {
   cors_configuration {
     allow_origins = [var.allowed_origin]
     allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    allow_headers = ["Content-Type", "Authorization"]
+    allow_headers = ["Content-Type", "Authorization", "X-User-Id"]
     max_age       = 3600
   }
 }
@@ -264,6 +264,12 @@ resource "aws_apigatewayv2_route" "lists_delete" {
 resource "aws_apigatewayv2_route" "favorites_add" {
   api_id    = aws_apigatewayv2_api.http.id
   route_key = "POST /favorites/{listId}"
+  target    = "integrations/${aws_apigatewayv2_integration.api_lambda.id}"
+}
+
+resource "aws_apigatewayv2_route" "favorites_get_all" {
+  api_id    = aws_apigatewayv2_api.http.id
+  route_key = "GET /favorites"
   target    = "integrations/${aws_apigatewayv2_integration.api_lambda.id}"
 }
 

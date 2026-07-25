@@ -17,11 +17,12 @@ Terraform infrastructure and React frontend for the Heads Up MVP.
   - AWS monthly budget resource (+ optional email notifications)
 - Frontend app (`frontend/`):
   - React + TypeScript + Vite
-  - Basic API-connected list UI (create/list)
+  - API-connected list UI (create/list/update/delete/favorites)
 - GitHub Actions workflows for:
   - Frontend + Terraform linting
   - Terraform plan on PR
   - Manual Terraform apply (OIDC)
+  - Frontend deploy to GitHub Pages
 
 ## Bootstrap remote Terraform state
 
@@ -88,3 +89,6 @@ Set this repository secret before running apply workflow:
 Set this repository variable for better PR plans:
 
 - `ALLOWED_ORIGIN` (for example `https://<github-username>.github.io`)
+- `VITE_API_BASE_URL` (API base URL used by frontend deploy workflow)
+
+For frontend publishing, enable GitHub Pages in repository settings and choose **GitHub Actions** as source.
