@@ -1,0 +1,43 @@
+name: Terraform Bootstrap
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-2' }}
+
+      - name: Terraform init (bootstrap)
+        working-directory: terraform/bootstrap
+        run: terraform init -input=false
+
+      - name: Terraform apply (bootstrap)
+        working-directory: terraform/bootstrap
+        run: |
+          if [ -z "${{ vars.TF_STATE_BUCKET }}" ]; then
+            echo "TF_STATE_BUCKET repository variable is required."
+            exit 1
+          fi
+          terraform apply -auto-approve -input=false \
+            -var="aws_region=${{ vars.AWS_REGION || 'eu-west-2' }}" \
+            -var="state_bucket_name=${{ vars.TF_STATE_BUCKET }}" \
+            -var="lock_table_name=${{ vars.TF_LOCK_TABLE || 'headsup-terraform-locks' }}"
+
