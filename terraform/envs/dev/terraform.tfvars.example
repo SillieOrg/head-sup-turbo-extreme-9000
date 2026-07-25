@@ -1,0 +1,15 @@
+aws_region     = "eu-west-2"
+project_name   = "headsup"
+environment    = "dev"
+allowed_origin = "https://<github-username>.github.io"
+log_retention_days = 7
+monthly_budget_usd = 5
+budget_alert_email = ""
+max_lists_per_user = 30
+max_words_per_list = 1000
+max_total_words_per_user = 12000
+max_updates_per_list_per_day = 40
+max_write_ops_per_user_per_day = 200
+max_global_lists = 500
+max_global_words = 150000
+max_versions_per_list = 10

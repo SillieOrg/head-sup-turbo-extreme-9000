@@ -28,13 +28,13 @@ Build and operate a **friends-only Heads Up web app (React PWA)** with an **AWS 
 - Quotas/guardrails:
   - Per-user and global limits
   - Write throttling patterns
-- Admin/management endpoints for moderation/list maintenance
 
 ### Out-of-scope (initially)
 - Full user account system/social login
-- Complex moderation workflows
+- Admin/moderation API
 - Multi-mode gameplay beyond classic
 - Native mobile app (React Native)
+- Telemetry/event collection table
 
 ## 3) High-Level Architecture
 - **GitHub Pages** serves React PWA static assets.
@@ -217,7 +217,8 @@ Exit criteria:
 └─ .github/
    └─ workflows/
       ├─ terraform-validate.yml
-      └─ terraform-plan-apply.yml
+      ├─ terraform-plan.yml
+      └─ terraform-apply.yml
 ```
 
 ## 9) GitHub Secrets Plan
@@ -234,11 +235,11 @@ Notes:
 - Prefer hashed secrets for app/admin shared values.
 - Avoid storing plaintext secrets in Terraform state.
 
-## 10) Open Decisions
-1. Single AWS account vs separate dev/prod accounts?
-2. Remote Terraform state backend (S3 + DynamoDB lock) bootstrap sequence.
-3. Whether to include telemetry table from day 1 or defer.
-4. Final admin API capabilities for moderation.
+## 10) Resolved Decisions
+1. AWS accounts: single account for MVP.
+2. Terraform state: remote backend via S3 + DynamoDB lock, bootstrapped once, then migrated.
+3. Telemetry table: deferred from day 1.
+4. Admin moderation API: deferred to a later milestone.
 
 ## 11) Definition of Done (MVP Infra)
 - Reproducible Terraform apply from CI
@@ -247,8 +248,8 @@ Notes:
 - API contract documented for frontend team
 
 ## 12) Immediate Next Steps
-1. Create Terraform baseline folders and provider config.
-2. Add CI workflow for fmt/validate/plan.
-3. Stand up Milestone 1 minimal stack in a dev environment.
-4. Validate CORS from GitHub Pages origin.
-5. Implement list CRUD with ownership + quotas.
+1. Tighten quota counters to fully transactional updates for create/update/delete flows.
+2. Add list delete route and decrement counters for user/global usage.
+3. Add version retention cap (keep latest N versions per list).
+4. Replace placeholder CORS origin in apply workflow input with real GitHub Pages origin.
+5. Run first remote apply and verify `GET /health` and list routes from deployed API URL.

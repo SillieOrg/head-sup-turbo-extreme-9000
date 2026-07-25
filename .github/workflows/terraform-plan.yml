@@ -1,0 +1,39 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-plan.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Terraform init (no backend)
+        working-directory: terraform/envs/dev
+        run: terraform init -backend=false
+
+      - name: Terraform plan (no refresh)
+        working-directory: terraform/envs/dev
+        run: |
+          terraform plan -refresh=false \
+            -var="aws_region=eu-west-2" \
+            -var="project_name=headsup" \
+            -var="environment=dev" \
+            -var="allowed_origin=${{ vars.ALLOWED_ORIGIN || 'https://example.github.io' }}" \
+            -var="log_retention_days=7" \
+            -var="monthly_budget_usd=5" \
+            -var="budget_alert_email="

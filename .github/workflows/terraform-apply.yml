@@ -1,0 +1,76 @@
+name: Terraform Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      aws_region:
+        description: AWS region
+        required: true
+        default: eu-west-2
+      state_bucket:
+        description: Terraform state S3 bucket
+        required: true
+      state_key:
+        description: Terraform state key
+        required: true
+        default: headsup/dev/terraform.tfstate
+      lock_table:
+        description: Terraform lock DynamoDB table
+        required: true
+        default: headsup-terraform-locks
+      allowed_origin:
+        description: Allowed CORS origin
+        required: true
+        default: https://example.github.io
+      monthly_budget_usd:
+        description: Monthly AWS budget in USD
+        required: true
+        default: "5"
+      budget_alert_email:
+        description: Budget alert email (optional)
+        required: false
+        default: ""
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  apply-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Terraform init (remote backend)
+        working-directory: terraform/envs/dev
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ github.event.inputs.state_bucket }}" \
+            -backend-config="key=${{ github.event.inputs.state_key }}" \
+            -backend-config="region=${{ github.event.inputs.aws_region }}" \
+            -backend-config="dynamodb_table=${{ github.event.inputs.lock_table }}" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform apply
+        working-directory: terraform/envs/dev
+        run: |
+          terraform apply -auto-approve \
+            -var="aws_region=${{ github.event.inputs.aws_region }}" \
+            -var="project_name=headsup" \
+            -var="environment=dev" \
+            -var="allowed_origin=${{ github.event.inputs.allowed_origin }}" \
+            -var="log_retention_days=7" \
+            -var="monthly_budget_usd=${{ github.event.inputs.monthly_budget_usd }}" \
+            -var="budget_alert_email=${{ github.event.inputs.budget_alert_email }}"
