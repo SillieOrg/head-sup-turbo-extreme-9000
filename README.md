@@ -90,5 +90,9 @@ Set this repository variable for better PR plans:
 
 - `ALLOWED_ORIGIN` (for example `https://<github-username>.github.io`)
 - `VITE_API_BASE_URL` (API base URL used by frontend deploy workflow)
+- `AWS_REGION` (for example `eu-west-2`)
+- `TF_STATE_BUCKET` (remote Terraform state bucket name)
+- `TF_STATE_KEY` (optional, defaults to `headsup/dev/terraform.tfstate`)
+- `TF_LOCK_TABLE` (optional, defaults to `headsup-terraform-locks`)
 
 For frontend publishing, enable GitHub Pages in repository settings and choose **GitHub Actions** as source.

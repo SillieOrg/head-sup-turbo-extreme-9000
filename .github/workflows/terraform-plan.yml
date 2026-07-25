@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   plan-dev:
@@ -22,14 +23,26 @@ jobs:
         with:
           terraform_version: 1.9.8
 
-      - name: Terraform init (no backend)
-        working-directory: terraform/envs/dev
-        run: terraform init -backend=false
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-2' }}
 
-      - name: Terraform plan (no refresh)
+      - name: Terraform init + plan
         working-directory: terraform/envs/dev
         run: |
-          terraform plan -refresh=false \
+          if [ -z "${{ vars.TF_STATE_BUCKET }}" ]; then
+            echo "TF_STATE_BUCKET repository variable is required for terraform plan."
+            exit 1
+          fi
+          terraform init -reconfigure -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ vars.TF_STATE_KEY || 'headsup/dev/terraform.tfstate' }}" \
+            -backend-config="region=${{ vars.AWS_REGION || 'eu-west-2' }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || 'headsup-terraform-locks' }}" \
+            -backend-config="encrypt=true"
+          terraform plan -refresh=false -input=false \
             -var="aws_region=eu-west-2" \
             -var="project_name=headsup" \
             -var="environment=dev" \
