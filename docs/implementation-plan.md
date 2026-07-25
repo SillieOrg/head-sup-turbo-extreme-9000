@@ -253,3 +253,6 @@ Notes:
 3. Run first remote apply and verify `GET /health`, list CRUD routes, and favorites routes from deployed API URL.
 4. Add offline cache/download behavior for lists in frontend.
 5. Add gyroscope-based gameplay screen and calibrate tilt thresholds.
+
+## 13) Future TODOs
+1. Add Google GIS OIDC login: frontend Google sign-in, backend token verification, then issue app JWT.
