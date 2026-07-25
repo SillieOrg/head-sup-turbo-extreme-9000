@@ -164,37 +164,37 @@ resource "aws_iam_role_policy" "lambda_api_dynamodb_access" {
 }
 
 resource "aws_lambda_function" "health" {
-  function_name = "${local.name_prefix}-health"
-  role          = aws_iam_role.lambda_health.arn
-  runtime       = "nodejs20.x"
-  handler       = "index.handler"
-  filename      = data.archive_file.health_lambda_zip.output_path
+  function_name    = "${local.name_prefix}-health"
+  role             = aws_iam_role.lambda_health.arn
+  runtime          = "nodejs20.x"
+  handler          = "index.handler"
+  filename         = data.archive_file.health_lambda_zip.output_path
   source_code_hash = data.archive_file.health_lambda_zip.output_base64sha256
 }
 
 resource "aws_lambda_function" "api" {
-  function_name = "${local.name_prefix}-api"
-  role          = aws_iam_role.lambda_api.arn
-  runtime       = "python3.12"
-  handler       = "app.handler"
-  filename      = data.archive_file.api_lambda_zip.output_path
+  function_name    = "${local.name_prefix}-api"
+  role             = aws_iam_role.lambda_api.arn
+  runtime          = "python3.12"
+  handler          = "app.handler"
+  filename         = data.archive_file.api_lambda_zip.output_path
   source_code_hash = data.archive_file.api_lambda_zip.output_base64sha256
-  timeout       = 10
+  timeout          = 10
 
   environment {
     variables = {
-      LISTS_TABLE                  = aws_dynamodb_table.tables["lists"].name
-      LIST_VERSIONS_TABLE          = aws_dynamodb_table.tables["list_versions"].name
-      FAVORITES_TABLE              = aws_dynamodb_table.tables["favorites"].name
-      USAGE_TABLE                  = aws_dynamodb_table.tables["usage_counters"].name
-      MAX_LISTS_PER_USER           = tostring(var.max_lists_per_user)
-      MAX_WORDS_PER_LIST           = tostring(var.max_words_per_list)
-      MAX_TOTAL_WORDS_PER_USER     = tostring(var.max_total_words_per_user)
-      MAX_UPDATES_PER_LIST_PER_DAY = tostring(var.max_updates_per_list_per_day)
+      LISTS_TABLE                    = aws_dynamodb_table.tables["lists"].name
+      LIST_VERSIONS_TABLE            = aws_dynamodb_table.tables["list_versions"].name
+      FAVORITES_TABLE                = aws_dynamodb_table.tables["favorites"].name
+      USAGE_TABLE                    = aws_dynamodb_table.tables["usage_counters"].name
+      MAX_LISTS_PER_USER             = tostring(var.max_lists_per_user)
+      MAX_WORDS_PER_LIST             = tostring(var.max_words_per_list)
+      MAX_TOTAL_WORDS_PER_USER       = tostring(var.max_total_words_per_user)
+      MAX_UPDATES_PER_LIST_PER_DAY   = tostring(var.max_updates_per_list_per_day)
       MAX_WRITE_OPS_PER_USER_PER_DAY = tostring(var.max_write_ops_per_user_per_day)
-      MAX_GLOBAL_LISTS             = tostring(var.max_global_lists)
-      MAX_GLOBAL_WORDS             = tostring(var.max_global_words)
-      MAX_VERSIONS_PER_LIST        = tostring(var.max_versions_per_list)
+      MAX_GLOBAL_LISTS               = tostring(var.max_global_lists)
+      MAX_GLOBAL_WORDS               = tostring(var.max_global_words)
+      MAX_VERSIONS_PER_LIST          = tostring(var.max_versions_per_list)
     }
   }
 }
