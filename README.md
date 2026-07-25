@@ -1,6 +1,6 @@
 # Head Sup Turbo Extreme 9000
 
-Terraform infrastructure and delivery workflows for the Heads Up MVP backend.
+Terraform infrastructure and React frontend for the Heads Up MVP.
 
 ## What exists now
 
@@ -15,8 +15,11 @@ Terraform infrastructure and delivery workflows for the Heads Up MVP backend.
   - DynamoDB tables (`users`, `lists`, `list_versions`, `favorites`, `usage_counters`)
   - CloudWatch log groups with 7-day retention
   - AWS monthly budget resource (+ optional email notifications)
+- Frontend app (`frontend/`):
+  - React + TypeScript + Vite
+  - Basic API-connected list UI (create/list)
 - GitHub Actions workflows for:
-  - Terraform formatting and validation
+  - Frontend + Terraform linting
   - Terraform plan on PR
   - Manual Terraform apply (OIDC)
 
@@ -50,6 +53,30 @@ Set-Location terraform\envs\dev
 terraform init -backend=false
 terraform validate
 terraform plan -refresh=false -var="aws_region=eu-west-2" -var="allowed_origin=https://<github-username>.github.io"
+```
+
+```powershell
+Set-Location frontend
+Copy-Item .env.example .env
+pnpm install
+pnpm dev
+```
+
+## Linting
+
+```powershell
+Set-Location frontend
+pnpm lint
+```
+
+```powershell
+terraform fmt -check -recursive terraform
+Set-Location terraform\bootstrap
+terraform init -backend=false
+terraform validate
+Set-Location ..\envs\dev
+terraform init -backend=false
+terraform validate
 ```
 
 ## GitHub Actions setup

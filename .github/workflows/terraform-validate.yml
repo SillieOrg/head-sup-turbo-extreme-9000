@@ -1,25 +1,47 @@
-name: Terraform Validate
+name: Project Lint
 
 on:
   pull_request:
     paths:
       - "terraform/**"
+      - "frontend/**"
       - ".github/workflows/terraform-validate.yml"
   push:
     branches: [main]
     paths:
       - "terraform/**"
+      - "frontend/**"
       - ".github/workflows/terraform-validate.yml"
 
 permissions:
   contents: read
 
 jobs:
-  validate:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Frontend lint
+        working-directory: frontend
+        run: pnpm lint
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -44,4 +66,3 @@ jobs:
       - name: Terraform validate (dev)
         working-directory: terraform/envs/dev
         run: terraform validate
-
