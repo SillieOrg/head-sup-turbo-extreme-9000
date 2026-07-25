@@ -2,34 +2,6 @@ name: Terraform Apply
 
 on:
   workflow_dispatch:
-    inputs:
-      aws_region:
-        description: AWS region
-        required: true
-        default: eu-west-2
-      state_bucket:
-        description: Terraform state S3 bucket
-        required: true
-      state_key:
-        description: Terraform state key
-        required: true
-        default: headsup/dev/terraform.tfstate
-      lock_table:
-        description: Terraform lock DynamoDB table
-        required: true
-        default: headsup-terraform-locks
-      allowed_origin:
-        description: Allowed CORS origin
-        required: true
-        default: https://example.github.io
-      monthly_budget_usd:
-        description: Monthly AWS budget in USD
-        required: true
-        default: "5"
-      budget_alert_email:
-        description: Budget alert email (optional)
-        required: false
-        default: ""
 
 permissions:
   id-token: write
@@ -51,26 +23,34 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ github.event.inputs.aws_region }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-2' }}
 
       - name: Terraform init (remote backend)
         working-directory: terraform/envs/dev
         run: |
+          if [ -z "${{ vars.TF_STATE_BUCKET }}" ]; then
+            echo "TF_STATE_BUCKET repository variable is required."
+            exit 1
+          fi
           terraform init \
-            -backend-config="bucket=${{ github.event.inputs.state_bucket }}" \
-            -backend-config="key=${{ github.event.inputs.state_key }}" \
-            -backend-config="region=${{ github.event.inputs.aws_region }}" \
-            -backend-config="dynamodb_table=${{ github.event.inputs.lock_table }}" \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ vars.TF_STATE_KEY || 'headsup/dev/terraform.tfstate' }}" \
+            -backend-config="region=${{ vars.AWS_REGION || 'eu-west-2' }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || 'headsup-terraform-locks' }}" \
             -backend-config="encrypt=true"
 
       - name: Terraform apply
         working-directory: terraform/envs/dev
         run: |
+          if [ -z "${{ vars.ALLOWED_ORIGIN }}" ]; then
+            echo "ALLOWED_ORIGIN repository variable is required."
+            exit 1
+          fi
           terraform apply -auto-approve \
-            -var="aws_region=${{ github.event.inputs.aws_region }}" \
+            -var="aws_region=${{ vars.AWS_REGION || 'eu-west-2' }}" \
             -var="project_name=headsup" \
             -var="environment=dev" \
-            -var="allowed_origin=${{ github.event.inputs.allowed_origin }}" \
+            -var="allowed_origin=${{ vars.ALLOWED_ORIGIN }}" \
             -var="log_retention_days=7" \
-            -var="monthly_budget_usd=${{ github.event.inputs.monthly_budget_usd }}" \
-            -var="budget_alert_email=${{ github.event.inputs.budget_alert_email }}"
+            -var="monthly_budget_usd=${{ vars.MONTHLY_BUDGET_USD || '5' }}" \
+            -var="budget_alert_email=${{ vars.BUDGET_ALERT_EMAIL || '' }}"
