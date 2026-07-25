@@ -29,20 +29,20 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'eu-west-2' }}
 
-      - name: Terraform init (remote backend)
+      - name: Terraform init + plan
         working-directory: terraform/envs/dev
         run: |
+          if [ -z "${{ vars.TF_STATE_BUCKET }}" ]; then
+            echo "TF_STATE_BUCKET repository variable is required for terraform plan."
+            exit 1
+          fi
           terraform init -reconfigure -input=false \
             -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ vars.TF_STATE_KEY || 'headsup/dev/terraform.tfstate' }}" \
             -backend-config="region=${{ vars.AWS_REGION || 'eu-west-2' }}" \
             -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || 'headsup-terraform-locks' }}" \
             -backend-config="encrypt=true"
-
-      - name: Terraform plan (no refresh)
-        working-directory: terraform/envs/dev
-        run: |
-          terraform plan -refresh=false \
+          terraform plan -refresh=false -input=false \
             -var="aws_region=eu-west-2" \
             -var="project_name=headsup" \
             -var="environment=dev" \
