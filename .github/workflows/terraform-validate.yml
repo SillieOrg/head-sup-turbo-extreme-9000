@@ -53,7 +53,7 @@ jobs:
 
       - name: Terraform init (bootstrap, no backend)
         working-directory: terraform/bootstrap
-        run: terraform init -backend=false
+        run: terraform init -backend=false -reconfigure -input=false
 
       - name: Terraform validate (bootstrap)
         working-directory: terraform/bootstrap
@@ -61,7 +61,7 @@ jobs:
 
       - name: Terraform init (dev, no backend)
         working-directory: terraform/envs/dev
-        run: terraform init -backend=false
+        run: terraform init -backend=false -reconfigure -input=false
 
       - name: Terraform validate (dev)
         working-directory: terraform/envs/dev
