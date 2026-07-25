@@ -7,12 +7,37 @@
   gap: 1rem;
 }
 
+.app.playing {
+  max-width: none;
+  padding: 0.75rem;
+}
+
 h1 {
   margin: 0 0 0.35rem 0;
 }
 
 h2 {
   margin: 0 0 0.75rem 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.5rem;
+}
+
+.tabs button {
+  width: auto;
+  margin: 0;
+  border: 1px solid var(--border);
+}
+
+.tabs button.active {
+  background: #0f172a;
+  color: #f8fafc;
+  border-color: #0f172a;
 }
 
 .panel {
@@ -113,11 +138,74 @@ button:disabled {
   padding: 0.6rem;
 }
 
+.app.playing .word-card {
+  min-height: 180px;
+  font-size: clamp(2rem, 6vw, 4rem);
+}
+
 .hint {
   margin-top: 0.5rem;
 }
 
+.word-card.correct {
+  animation: flash-correct 0.3s ease-out;
+}
+
+.word-card.skip {
+  animation: flash-skip 0.3s ease-out;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.toggle input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+}
+
+.debug {
+  margin-top: 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 0.65rem;
+}
+
+.debug p {
+  margin: 0.2rem 0;
+}
+
+@keyframes flash-correct {
+  from {
+    background: rgba(22, 163, 74, 0.35);
+    transform: scale(1.02);
+  }
+  to {
+    background: transparent;
+    transform: scale(1);
+  }
+}
+
+@keyframes flash-skip {
+  from {
+    background: rgba(220, 38, 38, 0.35);
+    transform: scale(1.02);
+  }
+  to {
+    background: transparent;
+    transform: scale(1);
+  }
+}
+
 @media (prefers-color-scheme: dark) {
+  .tabs button.active {
+    background: #a78bfa;
+    color: #111827;
+    border-color: #a78bfa;
+  }
+
   button {
     background: #27272a;
     color: #f4f4f5;
@@ -131,6 +219,14 @@ button:disabled {
 @media (max-width: 700px) {
   .app {
     padding: 1rem;
+  }
+
+  .tabs {
+    flex-direction: column;
+  }
+
+  .tabs button {
+    width: 100%;
   }
 
   .row {
